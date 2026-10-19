@@ -1,6 +1,8 @@
 import { z } from 'zod';
 import { countSentences } from './sentences';
 
+z.config(z.locales.pl());
+
 export const DOCUMENT_TYPES = ['faktura', 'umowa', 'oferta', 'raport', 'inne'] as const;
 
 export const SUMMARY_SENTENCES = { min: 3, max: 5 } as const;
