@@ -17,8 +17,7 @@ export function JsonPreview({ json }: Props) {
   }
 
   return (
-    <details className="card json-preview">
-      <summary>Podgląd JSON</summary>
+    <div className="card json-preview">
       <div className="json-preview__toolbar">
         <button type="button" className="button button--ghost button--small" onClick={copy}>
           Kopiuj JSON
@@ -31,6 +30,6 @@ export function JsonPreview({ json }: Props) {
       <pre tabIndex={0} aria-label="Wynik analizy w formacie JSON">
         <code>{json}</code>
       </pre>
-    </details>
+    </div>
   );
 }

@@ -111,9 +111,14 @@ describe('analysisSchema', () => {
 
   it('zachowuje kolejność i nazwy kluczy ze schematu briefu', () => {
     const parsed = analysisSchema.parse(validAnalysis());
-    expect(Object.keys(parsed.document)).toEqual(
-      expect.arrayContaining(['fileName', 'pages', 'language', 'type', 'title', 'date']),
-    );
+    expect(Object.keys(parsed.document)).toEqual([
+      'fileName',
+      'pages',
+      'language',
+      'type',
+      'title',
+      'date',
+    ]);
     expect(Object.keys(parsed)).toEqual(
       expect.arrayContaining(['summary', 'keyPoints', 'entities', 'amounts', 'dates', 'keywords']),
     );

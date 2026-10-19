@@ -4,6 +4,8 @@ import { useFocusOnMount } from './useFocusOnMount';
 
 export type ProcessingStep = 'reading' | 'ocr' | 'analyzing';
 
+const SLOW_AFTER_MS = 30_000;
+
 const STEPS: { id: ProcessingStep; label: string }[] = [
   { id: 'reading', label: 'Odczyt tekstu z PDF' },
   { id: 'ocr', label: 'Przygotowanie skanów do OCR' },
@@ -22,6 +24,7 @@ export function ProcessingView({ fileName, step, detail, startedAt, onCancel }: 
   const headingRef = useFocusOnMount<HTMLHeadingElement>();
   const [now, setNow] = useState(() => Date.now());
   const currentIndex = STEPS.findIndex((s) => s.id === step);
+  const elapsed = Math.max(0, now - startedAt);
 
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 250);
@@ -29,7 +32,11 @@ export function ProcessingView({ fileName, step, detail, startedAt, onCancel }: 
   }, []);
 
   return (
-    <section className="panel processing" aria-busy="true" aria-labelledby="processing-title">
+    <section
+      className="panel processing fade-in"
+      aria-busy="true"
+      aria-labelledby="processing-title"
+    >
       <div className="spinner" aria-hidden="true" />
       <h2 id="processing-title" ref={headingRef} tabIndex={-1}>
         Analizuję dokument
@@ -54,9 +61,19 @@ export function ProcessingView({ fileName, step, detail, startedAt, onCancel }: 
       <p className="processing__detail" aria-live="polite">
         {detail}
       </p>
-      <p className="processing__timer">Czas: {formatSeconds(Math.max(0, now - startedAt))}</p>
-      <button type="button" className="button button--ghost" onClick={onCancel}>
-        Anuluj
+      <p className="processing__timer">{formatSeconds(elapsed)}</p>
+      <p className="processing__hint" aria-live="polite">
+        {elapsed < SLOW_AFTER_MS
+          ? 'Zwykle trwa to 10–25 sekund.'
+          : 'Model AI jest teraz mocno obciążony, to może potrwać dłużej.'}
+      </p>
+      <button
+        type="button"
+        className="button button--ghost"
+        onClick={onCancel}
+        aria-keyshortcuts="Escape"
+      >
+        Anuluj <kbd aria-hidden="true">Esc</kbd>
       </button>
     </section>
   );

@@ -3,6 +3,7 @@ import { ApiError, analyzeDocument } from './api/client';
 import { Dropzone } from './components/Dropzone';
 import { ErrorView } from './components/ErrorView';
 import { HistoryList } from './components/HistoryList';
+import { HowItWorks } from './components/HowItWorks';
 import { PrivacyNotice } from './components/PrivacyNotice';
 import { ProcessingView, type ProcessingStep } from './components/ProcessingView';
 import { ResultView } from './components/ResultView';
@@ -54,6 +55,24 @@ export function App() {
       controllerRef.current?.abort();
     };
   }, []);
+
+  const processing = state.status === 'processing';
+
+  useEffect(() => {
+    if (!processing) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      controllerRef.current?.abort();
+      setState({ status: 'idle', notice: 'Analiza została anulowana.' });
+    };
+    const onLeave = (event: BeforeUnloadEvent) => event.preventDefault();
+    window.addEventListener('keydown', onKey);
+    window.addEventListener('beforeunload', onLeave);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('beforeunload', onLeave);
+    };
+  }, [processing]);
 
   function startController(): AbortController {
     controllerRef.current?.abort();
@@ -137,13 +156,15 @@ export function App() {
   return (
     <div className="app">
       <header className="app__header">
-        <a className="brand" href="./" aria-label="PDF Insight – strona główna">
-          <svg viewBox="0 0 32 32" aria-hidden="true" className="brand__logo">
-            <path d="M9 6h10l5 5v15H9z" />
-            <path d="M13 16h7M13 20h7" />
-          </svg>
-          <span>PDF Insight</span>
-        </a>
+        <h1 className="brand">
+          <a href="./">
+            <svg viewBox="0 0 32 32" aria-hidden="true" className="brand__logo">
+              <path d="M9 6h10l5 5v15H9z" />
+              <path d="M13 16h7M13 20h7" />
+            </svg>
+            PDF Insight
+          </a>
+        </h1>
         <p className="app__tagline">
           Wgraj PDF, a w kilka sekund otrzymasz krótkie podsumowanie i uporządkowane dane JSON.
         </p>
@@ -159,18 +180,13 @@ export function App() {
             )}
             <Dropzone onFiles={(files) => void handleFiles(files)} />
             <PrivacyNotice />
+            <HowItWorks />
             <HistoryList
               entries={entries}
               onOpen={(entry) => setState({ status: 'success', result: entry.result })}
               onRemove={(id) => setEntries(history.remove(id))}
               onClear={() => setEntries(history.clear())}
             />
-            {entries.length === 0 && (
-              <p className="empty">
-                Nie masz jeszcze żadnych analiz. Wynik pierwszej pojawi się tutaj i zostanie
-                zapisany w tej przeglądarce.
-              </p>
-            )}
           </>
         )}
 

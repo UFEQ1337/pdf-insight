@@ -80,9 +80,10 @@ export const summaryResultSchema = z.object({
 });
 
 export const analysisSchema = aiResultSchema.extend({
-  document: aiDocumentSchema.extend({
+  document: z.object({
     fileName: text,
     pages: z.number().int().positive(),
+    ...aiDocumentSchema.shape,
   }),
   meta: z.object({
     model: text,
