@@ -5,7 +5,7 @@ import { HttpError } from './errors';
 
 export interface Env {
   GEMINI_API_KEY: string;
-  GEMINI_MODEL: string;
+  GEMINI_MODELS: string;
   ALLOWED_ORIGINS: string;
   RATE_LIMITER: RateLimit;
 }
@@ -35,9 +35,10 @@ function corsHeaders(origin: string): Record<string, string> {
   };
 }
 
-function allowedOrigins(env: Env): string[] {
-  return env.ALLOWED_ORIGINS.split(',')
-    .map((origin) => origin.trim())
+function list(value: string): string[] {
+  return value
+    .split(',')
+    .map((item) => item.trim())
     .filter(Boolean);
 }
 
@@ -88,7 +89,8 @@ async function handleAnalyze(request: Request, env: Env): Promise<Response> {
   if (request.method !== 'POST') {
     throw new HttpError(405, 'METHOD_NOT_ALLOWED', 'Dozwolona jest tylko metoda POST.');
   }
-  if (!env.GEMINI_API_KEY) {
+  const models = list(env.GEMINI_MODELS ?? '');
+  if (!env.GEMINI_API_KEY || models.length === 0) {
     throw new HttpError(500, 'MISCONFIGURED', 'Serwer analizy nie jest skonfigurowany.');
   }
 
@@ -113,7 +115,7 @@ async function handleAnalyze(request: Request, env: Env): Promise<Response> {
 
   const analysis = await analyzeDocument(parsed.data, {
     apiKey: env.GEMINI_API_KEY,
-    model: env.GEMINI_MODEL,
+    models,
   });
   return json(analysis, 200);
 }
@@ -124,7 +126,7 @@ export default {
     if (url.pathname === '/health') return json({ status: 'ok' }, 200);
 
     const origin = request.headers.get('Origin') ?? '';
-    if (!allowedOrigins(env).includes(origin)) {
+    if (!list(env.ALLOWED_ORIGINS).includes(origin)) {
       return errorResponse(
         new HttpError(403, 'FORBIDDEN_ORIGIN', 'Żądania z tego źródła są niedozwolone.'),
       );

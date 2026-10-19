@@ -52,7 +52,7 @@ function geminiResponse(payload: unknown, status = 200): Response {
 function createEnv(overrides: Partial<Env> = {}): Env {
   return {
     GEMINI_API_KEY: API_KEY,
-    GEMINI_MODEL: 'gemini-test',
+    GEMINI_MODELS: 'gemini-test, gemini-backup',
     ALLOWED_ORIGINS: `${ORIGIN},http://localhost:5173`,
     RATE_LIMITER: { limit: async () => ({ success: true }) },
     ...overrides,
@@ -334,8 +334,34 @@ describe('analiza i obsługa błędów AI', () => {
   it('obsługuje brak połączenia z API AI', async () => {
     fetchMock.mockRejectedValue(new TypeError('fetch failed'));
     const response = await call(post(analyzeRequest()));
-    expect(response.status).toBe(502);
-    expect(await errorCode(response)).toBe('AI_UNREACHABLE');
+    expect(response.status).toBe(503);
+    expect(await errorCode(response)).toBe('AI_UNAVAILABLE');
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it.each([403, 429, 503])(
+    'przełącza się na zapasowy model, gdy główny zwraca HTTP %i',
+    async (status) => {
+      fetchMock
+        .mockResolvedValueOnce(new Response('{}', { status }))
+        .mockResolvedValueOnce(geminiResponse(aiResult()));
+      const response = await call(post(analyzeRequest()));
+      expect(response.status).toBe(200);
+      const body = (await response.json()) as { meta: { model: string } };
+      expect(body.meta.model).toBe('gemini-backup');
+      expect(String(fetchMock.mock.calls[1]?.[0])).toContain('gemini-backup');
+    },
+  );
+
+  it('nie przełącza modelu przy błędzie żądania (HTTP 400)', async () => {
+    fetchMock.mockResolvedValue(new Response('{}', { status: 400 }));
+    expect((await call(post(analyzeRequest()))).status).toBe(502);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('zwraca 500, gdy nie skonfigurowano modeli', async () => {
+    const response = await call(post(analyzeRequest()), createEnv({ GEMINI_MODELS: ' , ' }));
+    expect(response.status).toBe(500);
   });
 
   it('dzieli długi dokument na fragmenty i scala wyniki dodatkowym wywołaniem', async () => {

@@ -12,6 +12,11 @@ import {
 } from '../../src/lib/schema';
 import { HttpError } from './errors';
 import { generateJson, type GeminiConfig, type GeminiContent } from './gemini';
+
+export interface AnalyzeConfig {
+  apiKey: string;
+  models: string[];
+}
 import {
   ANALYSIS_RESPONSE_SCHEMA,
   ANALYSIS_SYSTEM_PROMPT,
@@ -23,6 +28,7 @@ import {
 
 const MAX_ATTEMPTS = 2;
 const MAX_CHUNKS = 8;
+const TIME_BUDGET_MS = 28_000;
 
 type Validation<T> = { ok: true; data: T } | { ok: false; feedback: string };
 
@@ -45,25 +51,32 @@ async function generateValidated<T>(
   contents: GeminiContent[],
   responseSchema: object,
   schema: z.ZodType<T>,
+  usedModels: Set<string>,
 ): Promise<T> {
   const history = [...contents];
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-    const { text, content } = await generateJson(config, {
+    const { text, model } = await generateJson(config, {
       systemInstruction,
       contents: history,
       responseSchema,
     });
+    usedModels.add(model);
     const result = validate(text, schema);
     if (result.ok) return result.data;
-    if (content.parts.length > 0) {
-      history.push(content, {
-        role: 'user',
-        parts: [
-          {
-            text: `Your previous answer failed validation:\n${result.feedback}\nReturn the complete, corrected JSON object.`,
-          },
-        ],
-      });
+    if (text) {
+      history.push(
+        { role: 'model', parts: [{ text }] },
+        {
+          role: 'user',
+          parts: [
+            {
+              text: `Your previous answer failed validation:
+${result.feedback}
+Return the complete, corrected JSON object.`,
+            },
+          ],
+        },
+      );
     }
   }
   throw new HttpError(
@@ -82,9 +95,11 @@ function skippedPagesWarning(pages: number[]): string[] {
 
 export async function analyzeDocument(
   request: AnalyzeRequest,
-  config: GeminiConfig,
+  { apiKey, models }: AnalyzeConfig,
 ): Promise<Analysis> {
   const startedAt = Date.now();
+  const config: GeminiConfig = { apiKey, models, deadline: startedAt + TIME_BUDGET_MS };
+  const usedModels = new Set<string>();
   const chunks = chunkDocument(request.pages, request.images);
   if (chunks.length > MAX_CHUNKS) {
     throw new HttpError(413, 'DOCUMENT_TOO_LONG', 'Dokument jest zbyt długi do analizy.');
@@ -103,6 +118,7 @@ export async function analyzeDocument(
         }),
         ANALYSIS_RESPONSE_SCHEMA,
         aiResultSchema,
+        usedModels,
       ),
     ),
   );
@@ -118,6 +134,7 @@ export async function analyzeDocument(
           buildSummaryContents(results, merged.document.language),
           SUMMARY_RESPONSE_SCHEMA,
           summaryResultSchema,
+          usedModels,
         );
 
   const warnings = [...merged.warnings, ...skippedPagesWarning(request.skippedPages)];
@@ -138,7 +155,7 @@ export async function analyzeDocument(
     keywords: merged.keywords,
     warnings,
     meta: {
-      model: config.model,
+      model: [...usedModels].join(', '),
       analyzedAt: new Date().toISOString(),
       durationMs: Date.now() - startedAt,
       chunks: chunks.length,
