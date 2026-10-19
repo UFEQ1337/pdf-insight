@@ -18,5 +18,5 @@
     "noUncheckedIndexedAccess": true,
     "exactOptionalPropertyTypes": true
   },
-  "include": ["worker/src"]
+  "include": ["worker/src", "worker/test"]
 }

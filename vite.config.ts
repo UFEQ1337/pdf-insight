@@ -37,7 +37,7 @@ export default defineConfig(({ mode }) => {
     base: '/pdf-insight/',
     plugins: [react(), contentSecurityPolicy(env.VITE_API_URL ?? '')],
     test: {
-      include: ['tests/**/*.test.ts'],
+      include: ['tests/**/*.test.ts', 'worker/test/**/*.test.ts'],
       environment: 'node',
     },
   };
