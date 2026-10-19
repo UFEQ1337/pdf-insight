@@ -25,6 +25,7 @@ export const analyzeRequestSchema = z
     pageCount: z.number().int().positive().max(5000),
     pages: z.array(pageTextSchema).max(5000),
     images: z.array(pageImageSchema).max(LIMITS.maxOcrPages),
+    skippedPages: z.array(z.number().int().positive()).max(5000),
   })
   .refine((request) => request.pages.length + request.images.length > 0, {
     message: 'Dokument nie zawiera tekstu ani stron do OCR',

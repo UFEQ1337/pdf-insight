@@ -1,0 +1,4 @@
+# Skopiuj do worker/.dev.vars (plik jest w .gitignore) i uzupełnij.
+# Klucz: https://aistudio.google.com/apikey
+GEMINI_API_KEY=
+ALLOWED_ORIGINS=http://localhost:5173,http://localhost:4173

@@ -1,0 +1,19 @@
+name = "pdf-insight-api"
+main = "src/index.ts"
+compatibility_date = "2026-10-01"
+workers_dev = true
+
+[vars]
+ALLOWED_ORIGINS = "https://ufeq1337.github.io"
+GEMINI_MODEL = "gemini-3.8-flash"
+
+[[ratelimits]]
+name = "RATE_LIMITER"
+namespace_id = "1001"
+
+  [ratelimits.simple]
+  limit = 5
+  period = 60
+
+[observability]
+enabled = true
