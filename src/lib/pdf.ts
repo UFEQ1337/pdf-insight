@@ -55,7 +55,7 @@ async function renderPageJpeg(page: PDFPageProxy): Promise<string | null> {
   canvas.height = Math.floor(viewport.height);
 
   try {
-    await page.render({ canvas, viewport }).promise;
+    await page.render({ canvas, viewport, intent: 'print' }).promise;
     for (const quality of JPEG_QUALITIES) {
       const dataUrl = canvas.toDataURL('image/jpeg', quality);
       const base64 = dataUrl.slice(dataUrl.indexOf(',') + 1);
