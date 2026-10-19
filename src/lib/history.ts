@@ -9,6 +9,21 @@ const entrySchema = z.object({ id: z.string().min(1), result: analysisSchema });
 export type HistoryEntry = z.infer<typeof entrySchema>;
 export type HistoryStorage = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
 
+export function browserStorage(): HistoryStorage {
+  try {
+    const storage = window.localStorage;
+    storage.getItem(HISTORY_KEY);
+    return storage;
+  } catch {
+    const memory = new Map<string, string>();
+    return {
+      getItem: (key) => memory.get(key) ?? null,
+      setItem: (key, value) => void memory.set(key, value),
+      removeItem: (key) => void memory.delete(key),
+    };
+  }
+}
+
 export function createHistory(storage: HistoryStorage, createId: () => string) {
   function load(): HistoryEntry[] {
     try {

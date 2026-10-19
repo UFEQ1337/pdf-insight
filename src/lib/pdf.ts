@@ -9,6 +9,7 @@ import {
 } from 'pdfjs-dist';
 import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import { normalizeText, removeRepeatedLines } from './cleanup';
+import { PdfError } from './pdfError';
 import { LIMITS, type AnalyzeRequest, type PageImage } from './request';
 
 GlobalWorkerOptions.workerSrc = workerUrl;
@@ -16,13 +17,6 @@ GlobalWorkerOptions.workerSrc = workerUrl;
 const MIN_PAGE_CHARS = 30;
 const OCR_MAX_SIDE = 1600;
 const JPEG_QUALITIES = [0.75, 0.55, 0.4];
-
-export class PdfError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = 'PdfError';
-  }
-}
 
 export type ExtractStep = 'reading' | 'ocr';
 export type ExtractProgress = (step: ExtractStep, detail: string) => void;
@@ -83,7 +77,10 @@ export async function extractPdf(
   signal: AbortSignal,
   onProgress: ExtractProgress,
 ): Promise<AnalyzeRequest> {
-  const task = getDocument({ data: new Uint8Array(await file.arrayBuffer()) });
+  const task = getDocument({
+    data: new Uint8Array(await file.arrayBuffer()),
+    stopAtErrors: false,
+  });
   try {
     const pdf = await openDocument(task);
     const rawTexts: string[] = [];
@@ -103,7 +100,7 @@ export async function extractPdf(
     for (const pageNumber of scanPages.slice(0, LIMITS.maxOcrPages)) {
       throwIfAborted(signal);
       onProgress('ocr', `Przygotowanie skanu strony ${pageNumber}`);
-      const data = await renderPageJpeg(await pdf.getPage(pageNumber));
+      const data = await renderPageJpeg(await pdf.getPage(pageNumber)).catch(() => null);
       if (data) images.push({ page: pageNumber, mimeType: 'image/jpeg', data });
       else skippedPages.push(pageNumber);
     }
@@ -115,6 +112,9 @@ export async function extractPdf(
     if (pages.length === 0 && images.length === 0) {
       throw new PdfError('Nie znaleziono w dokumencie tekstu do analizy.');
     }
+    if (pages.reduce((total, page) => total + page.text.length, 0) > LIMITS.maxTextChars) {
+      throw new PdfError('Dokument jest zbyt długi do analizy (limit to ok. 400 000 znaków).');
+    }
 
     return {
       fileName: file.name,
@@ -123,6 +123,14 @@ export async function extractPdf(
       images,
       skippedPages: skippedPages.sort((a, b) => a - b),
     };
+  } catch (error) {
+    if (
+      error instanceof PdfError ||
+      (error instanceof DOMException && error.name === 'AbortError')
+    ) {
+      throw error;
+    }
+    throw new PdfError('Nie udało się odczytać treści PDF. Plik może być uszkodzony.');
   } finally {
     await task.destroy();
   }
