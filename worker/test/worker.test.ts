@@ -145,6 +145,36 @@ describe('zabezpieczenia', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it('odrzuca zbyt duże żądanie przesyłane strumieniowo bez Content-Length', async () => {
+    const chunk = new Uint8Array(1024 * 1024).fill(32);
+    let sent = 0;
+    const body = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        if (sent++ < 12) controller.enqueue(chunk);
+        else controller.close();
+      },
+    });
+    const request = new Request('https://api.example.dev/analyze', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Origin: ORIGIN },
+      body,
+      duplex: 'half',
+    } as RequestInit);
+    const response = await call(request);
+    expect(response.status).toBe(413);
+    expect(sent).toBeLessThan(12);
+  });
+
+  it('odrzuca numery stron spoza dokumentu i dane obrazu, które nie są base64', async () => {
+    const outOfRange = analyzeRequest({ pages: [{ page: 3, text: 'x' }], pageCount: 2 });
+    const notBase64 = analyzeRequest({
+      images: [{ page: 1, mimeType: 'image/jpeg', data: '<svg onload=alert(1)>' }],
+    });
+    expect((await call(post(outOfRange))).status).toBe(400);
+    expect((await call(post(notBase64))).status).toBe(400);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it('odrzuca inny typ treści niż JSON', async () => {
     const response = await call(post('x', { headers: { 'Content-Type': 'text/plain' } }));
     expect(response.status).toBe(415);
@@ -211,6 +241,16 @@ describe('prompt injection', () => {
     expect(userText.match(/<\/document>/g)).toHaveLength(1);
     expect(userText.trim().endsWith('</document>')).toBe(true);
     expect(body.systemInstruction.parts[0]?.text).toContain('untrusted DATA');
+  });
+
+  it('neutralizuje złośliwe znaczniki w czasie liniowym (bez ReDoS)', async () => {
+    fetchMock.mockImplementation(async () => geminiResponse(aiResult()));
+    const text = '<document '.repeat(39_000);
+    const started = performance.now();
+    const response = await call(post(analyzeRequest({ pages: [{ page: 1, text }] })));
+    expect(response.status).toBe(200);
+    expect(performance.now() - started).toBeLessThan(1000);
+    expect(String(fetchMock.mock.calls[0]?.[1]?.body)).not.toContain('<document ');
   });
 
   it('dodaje ostrzeżenie, gdy dokument zawiera polecenia dla AI', async () => {
@@ -316,7 +356,7 @@ describe('analiza i obsługa błędów AI', () => {
   it('dołącza skany jako obrazy i zapisuje strony OCR w metadanych', async () => {
     fetchMock.mockResolvedValue(geminiResponse(aiResult()));
     const images = [{ page: 2, mimeType: 'image/jpeg' as const, data: 'AAAA' }];
-    const response = await call(post(analyzeRequest({ images, skippedPages: [7] })));
+    const response = await call(post(analyzeRequest({ images, skippedPages: [7], pageCount: 8 })));
     const body = (await response.json()) as { meta: { ocrPages: number[] }; warnings: string[] };
     expect(body.meta.ocrPages).toEqual([2]);
     expect(body.warnings.some((w) => w.includes('7'))).toBe(true);

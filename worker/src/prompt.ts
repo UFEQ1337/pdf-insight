@@ -129,7 +129,7 @@ export const SUMMARY_RESPONSE_SCHEMA = {
 } as const;
 
 function neutralize(text: string): string {
-  return text.replace(/<\s*\/?\s*(document|partial_analyses)\b[^>]*>/gi, '[…]');
+  return text.replace(/<\s{0,10}\/?\s{0,10}(document|partial_analyses)\b[^>]{0,200}>?/gi, '[…]');
 }
 
 function safeFileName(name: string): string {

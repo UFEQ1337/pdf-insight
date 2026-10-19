@@ -41,18 +41,42 @@ function allowedOrigins(env: Env): string[] {
     .filter(Boolean);
 }
 
+function payloadTooLarge(): HttpError {
+  return new HttpError(413, 'PAYLOAD_TOO_LARGE', 'Dokument jest zbyt duży do analizy.');
+}
+
+async function readBody(request: Request, maxBytes: number): Promise<string> {
+  if (!request.body) return '';
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  for (;;) {
+    const result = await reader.read();
+    if (result.done) break;
+    const chunk: Uint8Array = result.value;
+    size += chunk.byteLength;
+    if (size > maxBytes) {
+      await reader.cancel();
+      throw payloadTooLarge();
+    }
+    chunks.push(chunk);
+  }
+  const bytes = new Uint8Array(size);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return new TextDecoder().decode(bytes);
+}
+
 async function readJson(request: Request): Promise<unknown> {
-  if (!request.headers.get('Content-Type')?.includes('application/json')) {
+  if (!request.headers.get('Content-Type')?.startsWith('application/json')) {
     throw new HttpError(415, 'UNSUPPORTED_MEDIA_TYPE', 'Oczekiwano danych w formacie JSON.');
   }
   const declared = Number(request.headers.get('Content-Length') ?? '0');
-  if (declared > LIMITS.maxRequestBytes) {
-    throw new HttpError(413, 'PAYLOAD_TOO_LARGE', 'Dokument jest zbyt duży do analizy.');
-  }
-  const body = await request.text();
-  if (body.length > LIMITS.maxRequestBytes) {
-    throw new HttpError(413, 'PAYLOAD_TOO_LARGE', 'Dokument jest zbyt duży do analizy.');
-  }
+  if (declared > LIMITS.maxRequestBytes) throw payloadTooLarge();
+  const body = await readBody(request, LIMITS.maxRequestBytes);
   try {
     return JSON.parse(body);
   } catch {

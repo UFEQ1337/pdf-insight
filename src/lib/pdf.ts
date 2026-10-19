@@ -83,6 +83,11 @@ export async function extractPdf(
   });
   try {
     const pdf = await openDocument(task);
+    if (pdf.numPages > LIMITS.maxPages) {
+      throw new PdfError(
+        `Dokument ma zbyt wiele stron (${pdf.numPages}). Limit to ${LIMITS.maxPages}.`,
+      );
+    }
     const rawTexts: string[] = [];
     for (let n = 1; n <= pdf.numPages; n++) {
       throwIfAborted(signal);
